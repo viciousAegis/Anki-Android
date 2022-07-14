@@ -115,7 +115,6 @@ public class Finder {
         return res;
     }
 
-
     public List<Long> findNotes(String query) {
         String[] tokens = _tokenize(query);
         Pair<String, String[]> res1 = _where(tokens);

@@ -632,6 +632,7 @@ open class CollectionTask<Progress, Result>(val task: TaskDelegateBase<Progress,
             val searchResult_: List<Long>
             searchResult_ = try {
                 col.findCards(query, order, PartialSearch(searchResult, column1Index, column2Index, numCardsToRender, collectionTask, col))!!.requireNoNulls()
+//                  col.findNotes(query)
             } catch (e: Exception) {
                 // exception can occur via normal operation
                 Timber.w(e)
@@ -641,6 +642,53 @@ open class CollectionTask<Progress, Result>(val task: TaskDelegateBase<Progress,
             var position = 0
             for (cid in searchResult_) {
                 val card = CardCache(cid, col, position++)
+                searchResult.add(card)
+            }
+
+//            else {
+//                for (nid in searchResult_) {
+//                    val card = CardCache(Note(col,nid).firstCard().id, col, position++)
+//                    searchResult.add(card)
+//                }
+//            }
+            // Render the first few items
+            for (i in 0 until Math.min(numCardsToRender, searchResult.size)) {
+                if (collectionTask.isCancelled()) {
+                    Timber.d("doInBackgroundSearchCards was cancelled so return null")
+                    return SearchCardsResult.invalidResult()
+                }
+                searchResult[i].load(false, column1Index, column2Index)
+            }
+            // Finish off the task
+            return if (collectionTask.isCancelled()) {
+                Timber.d("doInBackgroundSearchCards was cancelled so return null")
+                SearchCardsResult.invalidResult()
+            } else {
+                SearchCardsResult.success(searchResult)
+            }
+        }
+    }
+
+    class SearchNotes(private val query: String, private val order: SortOrder, private val numCardsToRender: Int, private val column1Index: Int, private val column2Index: Int) : TaskDelegate<List<CardCache>, SearchCardsResult>() {
+        override fun task(col: Collection, collectionTask: ProgressSenderAndCancelListener<List<CardCache>>): SearchCardsResult {
+            Timber.d("doInBackgroundSearchCards")
+            if (collectionTask.isCancelled()) {
+                Timber.d("doInBackgroundSearchCards was cancelled so return null")
+                return SearchCardsResult.invalidResult()
+            }
+            val searchResult: MutableList<CardCache> = ArrayList()
+            val searchResult_: List<Long>
+            searchResult_ = try {
+                col.findNotes(query)
+            } catch (e: Exception) {
+                // exception can occur via normal operation
+                Timber.w(e)
+                return SearchCardsResult.error(e)
+            }
+            Timber.d("The search found %d cards", searchResult_.size)
+            var position = 0
+            for (nid in searchResult_) {
+                val card = CardCache(Note(col, nid).firstCard().id, col, position++)
                 searchResult.add(card)
             }
             // Render the first few items

@@ -77,6 +77,7 @@ import com.ichi2.async.CollectionTask.DeleteNoteMulti
 import com.ichi2.async.CollectionTask.MarkNoteMulti
 import com.ichi2.async.CollectionTask.RenderBrowserQA
 import com.ichi2.async.CollectionTask.SearchCards
+import com.ichi2.async.CollectionTask.SearchNotes
 import com.ichi2.async.CollectionTask.SuspendCardMulti
 import com.ichi2.async.CollectionTask.UpdateMultipleNotes
 import com.ichi2.async.CollectionTask.UpdateNote
@@ -132,6 +133,8 @@ open class CardBrowser : NavigationDrawerActivity(), SubtitleListener, DeckSelec
     private enum class TagsDialogListenerAction {
         FILTER, EDIT_TAGS
     }
+
+    var mIsCard = true
 
     /** List of cards in the browser.
      * When the list is changed, the position member of its elements should get changed. */
@@ -1236,6 +1239,9 @@ open class CardBrowser : NavigationDrawerActivity(), SubtitleListener, DeckSelec
             R.id.action_truncate -> {
                 onTruncate()
             }
+            R.id.action_switch_type -> {
+                onSwitch()
+            }
         }
         return super.onOptionsItemSelected(item)
     }
@@ -1252,6 +1258,19 @@ open class CardBrowser : NavigationDrawerActivity(), SubtitleListener, DeckSelec
             mCardsAdapter!!.notifyDataSetChanged()
             truncate.setChecked(true)
         }
+    }
+
+    private fun onSwitch() {
+        val buttonVal = mActionBarMenu!!.findItem(R.id.action_switch_type)
+        if (buttonVal.isChecked) {
+            mIsCard = true
+            buttonVal.isChecked = false
+        } else {
+            mIsCard = false
+            buttonVal.isChecked = true
+        }
+
+        searchCards()
     }
 
     protected fun deleteSelectedNote() {
@@ -1445,6 +1464,7 @@ open class CardBrowser : NavigationDrawerActivity(), SubtitleListener, DeckSelec
         savedInstanceState.putInt("mLastSelectedPosition", mLastSelectedPosition)
         savedInstanceState.putBoolean("mInMultiSelectMode", isInMultiSelectMode)
         savedInstanceState.putBoolean("mIsTruncated", isTruncated)
+        savedInstanceState.putBoolean("mIsCard", mIsCard)
         super.onSaveInstanceState(savedInstanceState)
     }
 
@@ -1458,6 +1478,7 @@ open class CardBrowser : NavigationDrawerActivity(), SubtitleListener, DeckSelec
         mLastSelectedPosition = savedInstanceState.getInt("mLastSelectedPosition")
         isInMultiSelectMode = savedInstanceState.getBoolean("mInMultiSelectMode")
         isTruncated = savedInstanceState.getBoolean("mIsTruncated")
+        mIsCard = savedInstanceState.getBoolean("mIsCard")
         searchCards()
     }
 
@@ -1490,22 +1511,33 @@ open class CardBrowser : NavigationDrawerActivity(), SubtitleListener, DeckSelec
         } else {
             if ("" != mSearchTerms) "$mRestrictOnDeck($mSearchTerms)" else mRestrictOnDeck
         }
+
         if (colIsOpen() && mCardsAdapter != null) {
-            // clear the existing card list
             mCards.reset()
             mCardsAdapter!!.notifyDataSetChanged()
-            //  estimate maximum number of cards that could be visible (assuming worst-case minimum row height of 20dp)
-            // Perform database query to get all card ids
-            TaskManager.launchCollectionTask(
-                SearchCards(
-                    searchText!!,
-                    if (mOrder == CARD_ORDER_NONE) NoOrdering() else UseCollectionOrdering(),
-                    numCardsToRender(),
-                    mColumn1Index,
-                    mColumn2Index
-                ),
-                mSearchCardsHandler
-            )
+            if (mIsCard) {
+                TaskManager.launchCollectionTask(
+                    SearchCards(
+                        searchText!!,
+                        if (mOrder == CARD_ORDER_NONE) NoOrdering() else UseCollectionOrdering(),
+                        numCardsToRender(),
+                        mColumn1Index,
+                        mColumn2Index
+                    ),
+                    mSearchCardsHandler
+                )
+            } else {
+                TaskManager.launchCollectionTask(
+                    SearchNotes(
+                        searchText!!,
+                        if (mOrder == CARD_ORDER_NONE) NoOrdering() else UseCollectionOrdering(),
+                        numCardsToRender(),
+                        mColumn1Index,
+                        mColumn2Index
+                    ),
+                    mSearchCardsHandler
+                )
+            }
         }
     }
 

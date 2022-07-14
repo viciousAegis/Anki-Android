@@ -1,4 +1,5 @@
-<menu xmlns:android="http://schemas.android.com/apk/res/android"
+<menu xmlns:tools="http://schemas.android.com/tools"
+    xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:ankidroid="http://schemas.android.com/apk/res-auto" >
 
     <item
@@ -93,5 +94,13 @@
         android:checked="false"
         android:title="@string/card_browser_truncate"
         ankidroid:showAsAction="never"/>
+
+    <item
+        android:id="@+id/action_switch_type"
+        android:checkable="true"
+        android:checked="false"
+        android:title="Switch"
+        ankidroid:showAsAction="never"
+        tools:ignore="HardcodedText" />
 
 </menu>
