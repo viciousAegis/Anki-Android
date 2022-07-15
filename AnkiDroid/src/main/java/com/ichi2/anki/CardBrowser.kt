@@ -134,7 +134,7 @@ open class CardBrowser : NavigationDrawerActivity(), SubtitleListener, DeckSelec
         FILTER, EDIT_TAGS
     }
 
-    var mIsCard = true
+    public var isCardsMode = true
 
     /** List of cards in the browser.
      * When the list is changed, the position member of its elements should get changed. */
@@ -1262,12 +1262,12 @@ open class CardBrowser : NavigationDrawerActivity(), SubtitleListener, DeckSelec
 
     private fun onSwitch() {
         val buttonVal = mActionBarMenu!!.findItem(R.id.action_switch_type)
-        if (buttonVal.isChecked) {
-            mIsCard = true
-            buttonVal.isChecked = false
+        if (!isCardsMode) {
+            isCardsMode = true
+            buttonVal.title = "Show Notes"
         } else {
-            mIsCard = false
-            buttonVal.isChecked = true
+            isCardsMode = false
+            buttonVal.title = "Show Cards"
         }
 
         searchCards()
@@ -1464,7 +1464,7 @@ open class CardBrowser : NavigationDrawerActivity(), SubtitleListener, DeckSelec
         savedInstanceState.putInt("mLastSelectedPosition", mLastSelectedPosition)
         savedInstanceState.putBoolean("mInMultiSelectMode", isInMultiSelectMode)
         savedInstanceState.putBoolean("mIsTruncated", isTruncated)
-        savedInstanceState.putBoolean("mIsCard", mIsCard)
+        savedInstanceState.putBoolean("isCardsMode", isCardsMode)
         super.onSaveInstanceState(savedInstanceState)
     }
 
@@ -1478,7 +1478,14 @@ open class CardBrowser : NavigationDrawerActivity(), SubtitleListener, DeckSelec
         mLastSelectedPosition = savedInstanceState.getInt("mLastSelectedPosition")
         isInMultiSelectMode = savedInstanceState.getBoolean("mInMultiSelectMode")
         isTruncated = savedInstanceState.getBoolean("mIsTruncated")
-        mIsCard = savedInstanceState.getBoolean("mIsCard")
+        isCardsMode = savedInstanceState.getBoolean("isCardsMode")
+
+        val switchBtn = mActionBarMenu!!.findItem(R.id.action_switch_type)
+        if (isCardsMode) {
+            switchBtn.title = "Show Notes"
+        } else {
+            switchBtn.title = "Show Cards"
+        }
         searchCards()
     }
 
@@ -1515,7 +1522,7 @@ open class CardBrowser : NavigationDrawerActivity(), SubtitleListener, DeckSelec
         if (colIsOpen() && mCardsAdapter != null) {
             mCards.reset()
             mCardsAdapter!!.notifyDataSetChanged()
-            if (mIsCard) {
+            if (isCardsMode) {
                 TaskManager.launchCollectionTask(
                     SearchCards(
                         searchText!!,
@@ -1566,7 +1573,8 @@ open class CardBrowser : NavigationDrawerActivity(), SubtitleListener, DeckSelec
     override val subtitleText: String
         get() {
             val count = cardCount
-            return resources.getQuantityString(R.plurals.card_browser_subtitle, count, count)
+            return if (isCardsMode) resources.getQuantityString(R.plurals.card_browser_subtitle, count, count)
+            else resources.getQuantityString(R.plurals.card_browser_subtitle_notes, count, count)
         }
 
     // convenience method for updateCardsInList(...)
@@ -2145,7 +2153,7 @@ open class CardBrowser : NavigationDrawerActivity(), SubtitleListener, DeckSelec
             (v.tag as Array<*>)
                 .forEachIndexed { i, col ->
                     setFont(col as TextView) // set font for column
-                    col.text = card.getColumnHeaderText(fromKeys[i]) // set text for column
+                    col.text = card.getColumnHeaderText(fromKeys[i], isCardsMode) // set text for column
                 }
             // set card's background color
             val backgroundColor: Int = getColorFromAttr(this@CardBrowser, card.color)
@@ -2384,7 +2392,7 @@ open class CardBrowser : NavigationDrawerActivity(), SubtitleListener, DeckSelec
                 }
             }
 
-        fun getColumnHeaderText(key: Column?): String? {
+        fun getColumnHeaderText(key: Column?, isCardsMode: bool): String? {
             return when (key) {
                 Column.FLAGS -> Integer.valueOf(card.userFlag()).toString()
                 Column.SUSPENDED -> if (card.queue == Consts.QUEUE_TYPE_SUSPENDED) "True" else "False"
@@ -2395,10 +2403,14 @@ open class CardBrowser : NavigationDrawerActivity(), SubtitleListener, DeckSelec
                 Column.CARD -> card.template().optString("name")
                 Column.DUE -> card.dueString
                 Column.EASE -> {
-                    if (card.type == Consts.CARD_TYPE_NEW) {
-                        AnkiDroidApp.getInstance().getString(R.string.card_browser_interval_new_card)
+                    if (!isCardsMode) {
+                        noteEase()
                     } else {
-                        (card.factor / 10).toString() + "%"
+                        if (card.type == Consts.CARD_TYPE_NEW) {
+                            AnkiDroidApp.getInstance().getString(R.string.card_browser_interval_new_card)
+                        } else {
+                            (card.factor / 10).toString() + "%"
+                        }
                     }
                 }
                 Column.CHANGED -> LanguageUtil.getShortDateFormatFromS(card.mod)
@@ -2421,6 +2433,26 @@ open class CardBrowser : NavigationDrawerActivity(), SubtitleListener, DeckSelec
                     mQa!!.second
                 }
                 else -> null
+            }
+        }
+
+        fun noteEase(): String {
+            val note = card.note()
+            var avgEase = 0
+            var cardCount = 0
+            for (card in note.cards()) {
+                if (card.type != Consts.CARD_TYPE_NEW) {
+                    avgEase += card.factor
+                    cardCount++
+                }
+            }
+
+            avgEase /= (10 * cardCount)
+
+            return if (avgEase == 0) {
+                AnkiDroidApp.getInstance().getString(R.string.card_browser_interval_new_card)
+            } else {
+                "$avgEase%"
             }
         }
 

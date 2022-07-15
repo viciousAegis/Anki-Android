@@ -97,9 +97,7 @@
 
     <item
         android:id="@+id/action_switch_type"
-        android:checkable="true"
-        android:checked="false"
-        android:title="Switch"
+        android:title="Show Notes"
         ankidroid:showAsAction="never"
         tools:ignore="HardcodedText" />
 
