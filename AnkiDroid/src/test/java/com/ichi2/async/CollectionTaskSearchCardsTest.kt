@@ -20,7 +20,6 @@ import com.ichi2.anki.CardBrowser.CardCache
 import com.ichi2.anki.RunInBackground
 import com.ichi2.anki.servicelayer.SearchService.SearchCardsResult
 import com.ichi2.async.CollectionTask.SearchCards
-import com.ichi2.async.CollectionTask.SearchNotes
 import com.ichi2.libanki.SortOrder.NoOrdering
 import com.ichi2.utils.KotlinCleanup
 import net.ankiweb.rsdroid.BackendFactory
@@ -64,31 +63,5 @@ class CollectionTaskSearchCardsTest : AbstractCollectionTaskTest() {
         val argumentCaptor2 = argumentCaptor<SearchCardsResult>()
         verify(listener, times(1)).onPostExecute(argumentCaptor2.capture())
         assertThat("All cards should be provided on Post Execute", argumentCaptor2.firstValue.size(), `is`(numberOfCards))
-    }
-
-    @Test
-    @RunInBackground
-    fun searchNotesNumberOfResultCount() {
-        // 2 notes, 4 cards
-        addNoteUsingBasicAndReversedModel("Hello", "World")
-        addNoteUsingBasicAndReversedModel("Foo", "Bar")
-
-        val notesToRender = 1
-        val numberOfNotes = 2
-
-        val task = SearchNotes("", numberOfNotes, 0, 0)
-        @Suppress("UNCHECKED_CAST")
-        val listener: TaskListener<List<CardCache>, SearchCardsResult?> = mock(TaskListener::class.java) as TaskListener<List<CardCache>, SearchCardsResult?>
-
-        waitForTask(task, listener)
-
-        verify(listener, times(1)).onPreExecute()
-        val argumentCaptor = argumentCaptor<List<CardCache>>()
-        verify(listener, times(1)).onProgressUpdate(argumentCaptor.capture())
-        assertThat("OnProgress sends the provided number of cards to render", argumentCaptor.firstValue.size, `is`(notesToRender))
-
-        val argumentCaptor2 = argumentCaptor<SearchCardsResult>()
-        verify(listener, times(1)).onPostExecute(argumentCaptor2.capture())
-        assertThat("All cards should be provided on Post Execute", argumentCaptor2.firstValue.size(), `is`(numberOfNotes))
     }
 }

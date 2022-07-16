@@ -77,7 +77,6 @@ import com.ichi2.async.CollectionTask.DeleteNoteMulti
 import com.ichi2.async.CollectionTask.MarkNoteMulti
 import com.ichi2.async.CollectionTask.RenderBrowserQA
 import com.ichi2.async.CollectionTask.SearchCards
-import com.ichi2.async.CollectionTask.SearchNotes
 import com.ichi2.async.CollectionTask.SuspendCardMulti
 import com.ichi2.async.CollectionTask.UpdateMultipleNotes
 import com.ichi2.async.CollectionTask.UpdateNote
@@ -1535,7 +1534,7 @@ open class CardBrowser : NavigationDrawerActivity(), SubtitleListener, DeckSelec
                 )
             } else {
                 TaskManager.launchCollectionTask(
-                    SearchNotes(
+                    SearchCards(
                         searchText!!,
                         if (mOrder == CARD_ORDER_NONE) NoOrdering() else UseCollectionOrdering(),
                         numCardsToRender(),
