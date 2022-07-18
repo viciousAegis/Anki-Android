@@ -87,9 +87,9 @@ Join Us On
 ## Credits
 
 
-### Github Contributors
+### Code Contributors
 
-Thanks to these awesome contributors who keep this project going
+Thanks to these awesome code contributors who keep this project going
 
 <a href="https://github.com/ankidroid/Anki-Android/graphs/contributors"><img src="https://opencollective.com/ankidroid/contributors.svg?width=890&button=false" /></a>
 
@@ -122,16 +122,7 @@ Thank you to all our backers! 🙏
 
 <a href="https://opencollective.com/ankidroid#backers" target="_blank"><img src="https://opencollective.com/ankidroid/backers.svg?width=890"></a>
 
-### [Contributors](https://opencollective.com/ankidroid#contributors)
-
-Our Awesome Team of Contributors
-
-<a href="https://opencollective.com/ankidroid#contributors" target="_blank"><img src="https://opencollective.com/ankidroid/contributors.svg?width=890"></a>
-
-
-
-
 License
 -------
-[GPL-3.0 License](https://github.com/ankidroid/Anki-Android/blob/main/COPYING)
-[AGPL-3.0 Licence](https://github.com/ankitects/anki/blob/main/LICENSE) for some part of the back-end
+* [GPL-3.0 License](https://github.com/ankidroid/Anki-Android/blob/main/COPYING)
+* [AGPL-3.0 Licence](https://github.com/ankitects/anki/blob/main/LICENSE) for some part of the back-end

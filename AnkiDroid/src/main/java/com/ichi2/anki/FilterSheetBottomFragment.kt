@@ -59,7 +59,7 @@ class FilterSheetBottomFragment :
 
     // flagName is displayed in filter sheet as the name of the filter
     enum class Flags(@StringRes private val flagNameRes: Int, val flagNode: SearchNode.Flag, @DrawableRes val flagIcon: Int) {
-        NO_FLAG(R.string.menu_flag_card_zero, SearchNode.Flag.FLAG_NONE, R.drawable.ic_flag_transparent),
+        NO_FLAG(R.string.menu_flag_card_zero, SearchNode.Flag.FLAG_NONE, R.drawable.label_icon_flags),
         RED(R.string.menu_flag_card_one, SearchNode.Flag.FLAG_RED, R.drawable.ic_flag_red),
         ORANGE(R.string.menu_flag_card_two, SearchNode.Flag.FLAG_ORANGE, R.drawable.ic_flag_orange),
         GREEN(R.string.menu_flag_card_three, SearchNode.Flag.FLAG_GREEN, R.drawable.ic_flag_green),
@@ -80,7 +80,9 @@ class FilterSheetBottomFragment :
         applyButton.setOnClickListener {
             val filterQuery = createQuery(flagSearchItems)
 
-            (activity as CardBrowser).searchWithFilterQuery(filterQuery)
+            if (filterQuery != "") {
+                (activity as CardBrowser).searchWithFilterQuery(filterQuery)
+            }
             dismiss()
         }
 
@@ -151,6 +153,10 @@ class FilterSheetBottomFragment :
     private fun createQuery(
         flagList: MutableList<SearchNode.Flag>
     ): String {
+
+        if (flagList.isEmpty()) {
+            return ""
+        }
 
         val node = searchNode {
             group = group {
