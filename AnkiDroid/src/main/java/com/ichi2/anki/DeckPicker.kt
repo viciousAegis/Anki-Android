@@ -90,11 +90,8 @@ import com.ichi2.async.CollectionTask.*
 import com.ichi2.async.Connection.CancellableTaskListener
 import com.ichi2.async.Connection.ConflictResolution
 import com.ichi2.compat.CompatHelper.Companion.sdkVersion
-import com.ichi2.libanki.ChangeManager
+import com.ichi2.libanki.*
 import com.ichi2.libanki.Collection.CheckDatabaseResult
-import com.ichi2.libanki.Consts
-import com.ichi2.libanki.Decks
-import com.ichi2.libanki.Utils
 import com.ichi2.libanki.importer.AnkiPackageImporter
 import com.ichi2.libanki.sched.AbstractDeckTreeNode
 import com.ichi2.libanki.sched.TreeNode
@@ -106,6 +103,7 @@ import com.ichi2.ui.BadgeDrawableBuilder
 import com.ichi2.utils.*
 import com.ichi2.utils.Permissions.hasStorageAccessPermission
 import com.ichi2.widget.WidgetStatus
+import kotlinx.coroutines.Job
 import net.ankiweb.rsdroid.BackendFactory
 import net.ankiweb.rsdroid.RustCleanup
 import timber.log.Timber
@@ -147,7 +145,7 @@ open class DeckPicker :
     MediaCheckDialogListener,
     OnRequestPermissionsResultCallback,
     CustomStudyListener,
-    ChangeManager.ChangeSubscriber {
+    ChangeManager.Subscriber {
     // Short animation duration from system
     private var mShortAnimDuration = 0
     private var mBackButtonPressedToExit = false
@@ -621,7 +619,7 @@ open class DeckPicker :
                 return true
             }
         })
-        if (colIsOpen()) {
+        if (colIsOpen() && !CollectionHelper.getInstance().isCollectionLocked) {
             displaySyncBadge(menu)
 
             // Show / hide undo
@@ -1222,9 +1220,20 @@ open class DeckPicker :
 
     private fun undo() {
         Timber.i("undo()")
-        val undoReviewString = resources.getString(R.string.undo_action_review)
-        val isReview = undoReviewString == col.undoName(resources)
-        Undo().runWithHandler(undoTaskListener(isReview))
+        fun legacyUndo() {
+            val undoReviewString = resources.getString(R.string.undo_action_review)
+            val isReview = undoReviewString == col.undoName(resources)
+            Undo().runWithHandler(undoTaskListener(isReview))
+        }
+        if (BackendFactory.defaultLegacySchema) {
+            legacyUndo()
+        } else {
+            launchCatchingCollectionTask { col ->
+                if (!backendUndoAndShowPopup(col)) {
+                    legacyUndo()
+                }
+            }
+        }
     }
 
     // Show dialogs to deal with database loading issues etc
@@ -1370,7 +1379,11 @@ open class DeckPicker :
 
     private fun performIntegrityCheck() {
         Timber.i("performIntegrityCheck()")
-        TaskManager.launchCollectionTask(CheckDatabase(), CheckDatabaseListener())
+        if (BackendFactory.defaultLegacySchema) {
+            TaskManager.launchCollectionTask(CheckDatabase(), CheckDatabaseListener())
+        } else {
+            handleDatabaseCheck()
+        }
     }
 
     private fun mediaCheckListener(): MediaCheckListener {
@@ -1842,16 +1855,19 @@ open class DeckPicker :
         if (BackendFactory.defaultLegacySchema) {
             TaskManager.launchCollectionTask(ImportAdd(importPath), mImportAddListener)
         } else {
-            for (file in importPath) {
-                importApkg(file)
-            }
+            importApkgs(importPath)
         }
     }
 
     // Callback to import a file -- replacing the existing collection
     @NeedsTest("Test 2 successful files & test 1 failure & 1 successful file")
     override fun importReplace(importPath: List<String>) {
-        TaskManager.launchCollectionTask(ImportReplace(importPath), importReplaceListener())
+        if (BackendFactory.defaultLegacySchema) {
+            TaskManager.launchCollectionTask(ImportReplace(importPath), importReplaceListener())
+        } else {
+            // multiple colpkg files is nonsensical
+            importColpkg(importPath[0])
+        }
     }
 
     /**
@@ -2046,7 +2062,7 @@ open class DeckPicker :
             context.mDueTree = result.map { x -> x.unsafeCastToType(AbstractDeckTreeNode::class.java) }
             context.renderPage()
             // Update the mini statistics bar as well
-            deckPicker?.catchingLifecycleScope(deckPicker) {
+            deckPicker?.launchCatchingTask {
                 AnkiStatsTaskHandler.createReviewSummaryStatistics(context.col, context.mReviewSummaryTextView)
             }
             Timber.d("Startup - Deck List UI Completed")
@@ -2223,15 +2239,32 @@ open class DeckPicker :
         createDeckDialog.showDialog()
     }
 
-    fun confirmDeckDeletion(did: Long) {
+    fun confirmDeckDeletion(did: Long): Job? {
+        if (!BackendFactory.defaultLegacySchema) {
+            dismissAllDialogFragments()
+            // No confirmation required, as undoable
+            return launchCatchingCollectionTask { col ->
+                val changes = runInBackgroundWithProgress {
+                    undoableOp {
+                        col.newDecks.removeDecks(listOf(did))
+                    }
+                }
+                showSimpleSnackbar(
+                    this@DeckPicker,
+                    col.tr.browsingCardsDeleted(changes.count),
+                    false
+                )
+            }
+        }
+
         val res = resources
         if (!colIsOpen()) {
-            return
+            return null
         }
         if (did == 1L) {
             showSimpleSnackbar(this, R.string.delete_deck_default_deck, true)
             dismissAllDialogFragments()
-            return
+            return null
         }
         // Get the number of cards contained in this deck and its subdecks
         val cnt = DeckService.countCardsInDeckTree(col, did)
@@ -2240,7 +2273,7 @@ open class DeckPicker :
         if (cnt == 0 && !isDyn) {
             deleteDeck(did)
             dismissAllDialogFragments()
-            return
+            return null
         }
         // Otherwise we show a warning and require confirmation
         val msg: String
@@ -2251,6 +2284,7 @@ open class DeckPicker :
             res.getQuantityString(R.plurals.delete_deck_message, cnt, deckName, cnt)
         }
         showDialogFragment(DeckPickerConfirmDeleteDeckDialog.newInstance(msg, did))
+        return null
     }
 
     /**
@@ -2616,6 +2650,7 @@ open class DeckPicker :
 
     override fun opExecuted(changes: OpChanges, handler: Any?) {
         if (changes.studyQueues && handler !== this) {
+            invalidateOptionsMenu()
             updateDeckList()
         }
     }

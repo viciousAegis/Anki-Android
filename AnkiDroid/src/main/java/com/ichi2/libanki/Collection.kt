@@ -99,8 +99,18 @@ open class Collection(
 
     open val newBackend: CollectionV16
         get() = throw Exception("invalid call to newBackend on old backend")
+
     open val newMedia: BackendMedia
         get() = throw Exception("invalid call to newMedia on old backend")
+
+    open val newTags: TagsV16
+        get() = throw Exception("invalid call to newTags on old backend")
+
+    open val newModels: ModelsV16
+        get() = throw Exception("invalid call to newModels on old backend")
+
+    open val newDecks: DecksV16
+        get() = throw Exception("invalid call to newDecks on old backend")
 
     @VisibleForTesting(otherwise = VisibleForTesting.NONE)
     fun debugEnsureNoOpenPointers() {
@@ -135,7 +145,7 @@ open class Collection(
         "move accessor methods here, maybe reconsider return type." +
             "See variable: conf"
     )
-    private var _config: ConfigManager? = null
+    protected var _config: ConfigManager? = null
 
     @KotlinCleanup("see if we can inline a function inside init {} and make this `val`")
     lateinit var sched: AbstractSched
@@ -147,7 +157,8 @@ open class Collection(
     // BEGIN: SQL table columns
     open var crt: Long = 0
     open var mod: Long = 0
-    var scm: Long = 0
+    open var scm: Long = 0
+    @RustCleanup("remove")
     var dirty: Boolean = false
     private var mUsn = 0
     private var mLs: Long = 0
@@ -278,7 +289,7 @@ open class Collection(
      * DB-related *************************************************************** ********************************
      */
     @KotlinCleanup("Cleanup: make cursor a val + move cursor and cursor.close() to the try block")
-    fun load() {
+    open fun load() {
         var cursor: Cursor? = null
         var deckConf: String?
         try {
@@ -479,7 +490,7 @@ open class Collection(
      * is used so that the type does not states that an exception is
      * thrown when in fact it is never thrown.
      */
-    fun modSchemaNoCheck() {
+    open fun modSchemaNoCheck() {
         scm = TimeManager.time.intTimeMS()
         setMod()
     }
@@ -504,12 +515,12 @@ open class Collection(
     }
 
     /** True if schema changed since last sync.  */
-    fun schemaChanged(): Boolean {
+    open fun schemaChanged(): Boolean {
         return scm > mLs
     }
 
     @KotlinCleanup("maybe change to getter")
-    fun usn(): Int {
+    open fun usn(): Int {
         return if (server) {
             mUsn
         } else {
@@ -1332,6 +1343,12 @@ open class Collection(
         return Finder(this).findCards(search, order, task)
     }
 
+    /** Return a list of card ids  */
+    @KotlinCleanup("Remove in V16.") // Not in libAnki
+    fun findOneCardByNote(query: String?): List<Long> {
+        return Finder(this).findOneCardByNote(query)
+    }
+
     /** Return a list of note ids  */
     fun findNotes(query: String?): List<Long> {
         return Finder(this).findNotes(query)
@@ -1429,17 +1446,17 @@ open class Collection(
         } else null
     }
 
-    fun undoName(res: Resources?): String {
+    open fun undoName(res: Resources): String {
         val type = undoType()
-        return type?.name(res!!) ?: ""
+        return type?.name(res) ?: ""
     }
 
-    fun undoAvailable(): Boolean {
+    open fun undoAvailable(): Boolean {
         Timber.d("undoAvailable() undo size: %s", undo.size)
         return !undo.isEmpty()
     }
 
-    fun undo(): Card? {
+    open fun undo(): Card? {
         val lastUndo: UndoAction = undo.removeLast()
         Timber.d("undo() of type %s", lastUndo.javaClass)
         return lastUndo.undo(this)

@@ -16,13 +16,16 @@
 package com.ichi2.libanki
 
 import android.content.Context
+import android.content.res.Resources
 import com.ichi2.async.CollectionTask
 import com.ichi2.libanki.backend.*
 import com.ichi2.libanki.backend.model.toProtoBuf
 import com.ichi2.libanki.exception.InvalidSearchException
+import com.ichi2.libanki.utils.TimeManager
 import net.ankiweb.rsdroid.Backend
 import net.ankiweb.rsdroid.RustCleanup
 import net.ankiweb.rsdroid.exceptions.BackendInvalidInputException
+import timber.log.Timber
 
 class CollectionV16(
     context: Context,
@@ -33,15 +36,15 @@ class CollectionV16(
 ) : Collection(context, path, server, log, backend) {
 
     override fun initTags(): TagManager {
-        return TagsV16(this, RustTagsBackend(backend))
+        return TagsV16(this)
     }
 
     override fun initDecks(deckConf: String?): DeckManager {
-        return DecksV16(this, RustDroidDeckBackend(backend))
+        return DecksV16(this)
     }
 
     override fun initModels(): ModelManager {
-        return ModelsV16(this, backend)
+        return ModelsV16(this)
     }
 
     override fun initConf(conf: String?): ConfigManager {
@@ -58,6 +61,20 @@ class CollectionV16(
     override val newMedia: BackendMedia
         get() = this.media as BackendMedia
 
+    override val newTags: TagsV16
+        get() = this.tags as TagsV16
+
+    override val newModels: ModelsV16
+        get() = this.models as ModelsV16
+
+    override val newDecks: DecksV16
+        get() = this.decks as DecksV16
+
+    override fun load() {
+        _config = initConf(null)
+        decks = initDecks(null)
+    }
+
     override fun flush(mod: Long) {
         // no-op
     }
@@ -67,6 +84,20 @@ class CollectionV16(
 
     override var crt: Long = 0
         get() = db.queryLongScalar("select crt from col")
+
+    override var scm: Long = 0
+        get() = db.queryLongScalar("select scm from col")
+
+    var lastSync: Long = 0
+        get() = db.queryLongScalar("select ls from col")
+
+    override fun usn(): Int {
+        return -1
+    }
+
+    override fun schemaChanged(): Boolean {
+        return scm > lastSync
+    }
 
     /** col.conf is now unused, handled by [ConfigV16] which has a separate table */
     override fun flushConf(): Boolean = false
@@ -93,11 +124,15 @@ class CollectionV16(
         return TemplateManager.TemplateRenderContext.from_existing_card(c, browser).render()
     }
 
+    @RustCleanup("drop the PartialSearch handling in the browse screen, which slows things down")
     override fun findCards(
         search: String,
         order: SortOrder,
         task: CollectionTask.PartialSearch?
     ): List<Long> {
+        if (task?.isCancelled() == true) {
+            return listOf()
+        }
         val adjustedOrder = if (order is SortOrder.UseCollectionOrdering) {
             @Suppress("DEPRECATION")
             SortOrder.BuiltinSortKind(
@@ -112,13 +147,48 @@ class CollectionV16(
         } catch (e: BackendInvalidInputException) {
             throw InvalidSearchException(e)
         }
-
-        task?.doProgress(cardIdsList)
+        for (id in cardIdsList) {
+            if (task?.isCancelled() == true) {
+                break
+            }
+            task?.doProgress(listOf(id))
+        }
         return cardIdsList
     }
 
     /** Takes raw input from TypeScript frontend and returns suitable translations. */
     fun i18nResourcesRaw(input: ByteArray): ByteArray {
         return backend.i18nResourcesRaw(input = input)
+    }
+
+    /** Fixes and optimizes the database. If any errors are encountered, a list of
+     * problems is returned. Throws if DB is unreadable. */
+    fun fixIntegrity(): List<String> {
+        return backend.checkDatabase()
+    }
+
+    override fun modSchemaNoCheck() {
+        db.execute(
+            "update col set scm=?, mod=?",
+            TimeManager.time.intTimeMS(),
+            TimeManager.time.intTimeMS()
+        )
+    }
+
+    override fun undoAvailable(): Boolean {
+        val status = undoStatus()
+        Timber.i("undo: %s, %s", status, super.undoAvailable())
+        if (status.undo != null) {
+            // any legacy undo state is invalid after a backend op
+            clearUndo()
+            return true
+        }
+        // if no backend undo state, try legacy undo state
+        return super.undoAvailable()
+    }
+
+    override fun undoName(res: Resources): String {
+        val status = undoStatus()
+        return status.undo ?: super.undoName(res)
     }
 }
