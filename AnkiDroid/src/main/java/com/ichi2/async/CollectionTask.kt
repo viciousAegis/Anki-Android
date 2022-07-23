@@ -661,7 +661,7 @@ open class CollectionTask<Progress, Result>(val task: TaskDelegateBase<Progress,
         }
     }
 
-    class SearchNotes(private val query: String, private val numCardsToRender: Int, private val column1Index: Int, private val column2Index: Int) : TaskDelegate<List<CardCache>, SearchCardsResult>() {
+    class SearchNotes(private val query: String, private val order: SortOrder, val numCardsToRender: Int, private val column1Index: Int, private val column2Index: Int) : TaskDelegate<List<CardCache>, SearchCardsResult>() {
         override fun task(col: Collection, collectionTask: ProgressSenderAndCancelListener<List<CardCache>>): SearchCardsResult {
             Timber.d("doInBackgroundSearchCards")
             if (collectionTask.isCancelled()) {
@@ -671,7 +671,11 @@ open class CollectionTask<Progress, Result>(val task: TaskDelegateBase<Progress,
             val searchResult: MutableList<CardCache> = ArrayList()
             val searchResult_: List<Long>
             searchResult_ = try {
-                col.findOneCardByNote(query).requireNoNulls()
+                if (BackendFactory.defaultLegacySchema) {
+                    col.findOneCardByNote(query).requireNoNulls()
+                } else {
+                    col.findNotes(query, order)
+                }
             } catch (e: Exception) {
                 // exception can occur via normal operation
                 Timber.w(e)
@@ -679,9 +683,16 @@ open class CollectionTask<Progress, Result>(val task: TaskDelegateBase<Progress,
             }
             Timber.d("The search found %d cards", searchResult_.size)
             var position = 0
-            for (cid in searchResult_) {
-                val card = CardCache(cid, col, position++)
-                searchResult.add(card)
+            if (BackendFactory.defaultLegacySchema) {
+                for (cid in searchResult_) {
+                    val card = CardCache(cid, col, position++)
+                    searchResult.add(card)
+                }
+            } else {
+                for (nid in searchResult_) {
+                    val card = CardCache(Note(col, nid).firstCard().id, col, position++)
+                    searchResult.add(card)
+                }
             }
             // Render the first few items
             for (i in 0 until Math.min(numCardsToRender, searchResult.size)) {

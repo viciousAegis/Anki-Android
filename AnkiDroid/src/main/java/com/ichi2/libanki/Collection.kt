@@ -1350,7 +1350,11 @@ open class Collection(
     }
 
     /** Return a list of note ids  */
-    fun findNotes(query: String?): List<Long> {
+    fun findNotes(query: String): List<Long> {
+        return findNotes(query, SortOrder.NoOrdering())
+    }
+
+    open fun findNotes(query: String, order: SortOrder): List<Long> {
         return Finder(this).findNotes(query)
     }
 
