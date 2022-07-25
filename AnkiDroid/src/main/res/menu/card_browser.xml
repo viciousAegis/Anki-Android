@@ -2,6 +2,11 @@
     xmlns:ankidroid="http://schemas.android.com/apk/res-auto" >
 
     <item
+        android:id="@+id/action_switch_cards_notes_mode"
+        android:title="@string/menu_switch_to_notes_mode"
+        ankidroid:showAsAction="never"/>
+
+    <item
         android:id="@+id/action_add_note_from_card_browser"
         android:icon="@drawable/ic_add_white"
         android:title="@string/menu_add"

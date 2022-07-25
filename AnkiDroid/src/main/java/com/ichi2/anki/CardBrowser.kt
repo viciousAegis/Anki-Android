@@ -78,6 +78,7 @@ import com.ichi2.async.CollectionTask.DeleteNoteMulti
 import com.ichi2.async.CollectionTask.MarkNoteMulti
 import com.ichi2.async.CollectionTask.RenderBrowserQA
 import com.ichi2.async.CollectionTask.SearchCards
+import com.ichi2.async.CollectionTask.SearchNotes
 import com.ichi2.async.CollectionTask.SuspendCardMulti
 import com.ichi2.async.CollectionTask.UpdateMultipleNotes
 import com.ichi2.async.CollectionTask.UpdateNote
@@ -139,6 +140,9 @@ open class CardBrowser :
     private enum class TagsDialogListenerAction {
         FILTER, EDIT_TAGS
     }
+
+    /** Variable to keep track of whether the browser is in Cards or Notes mode */
+    private var isInCardsMode = true
 
     /** List of cards in the browser.
      * When the list is changed, the position member of its elements should get changed. */
@@ -932,6 +936,12 @@ open class CardBrowser :
             isVisible = col.undoAvailable()
             title = resources.getString(R.string.studyoptions_congrats_undo, col.undoName(resources))
         }
+        mActionBarMenu!!.findItem(R.id.action_switch_cards_notes_mode).title =
+            if (isInCardsMode) {
+                getString(R.string.menu_switch_to_notes_mode)
+            } else {
+                getString(R.string.menu_switch_to_cards_mode)
+            }
 
         // Maybe we were called from ACTION_PROCESS_TEXT.
         // In that case we already fill in the search.
@@ -1036,6 +1046,10 @@ open class CardBrowser :
         when (item.itemId) {
             android.R.id.home -> {
                 endMultiSelectMode()
+                return true
+            }
+            R.id.action_switch_cards_notes_mode -> {
+                switchBetweenCardsNotesMode()
                 return true
             }
             R.id.action_add_note_from_card_browser -> {
@@ -1252,6 +1266,20 @@ open class CardBrowser :
         return super.onOptionsItemSelected(item)
     }
 
+    private fun switchBetweenCardsNotesMode() {
+        val button = mActionBarMenu!!.findItem(R.id.action_switch_cards_notes_mode)
+
+        if (isInCardsMode) {
+            isInCardsMode = false
+            button.title = getString(R.string.menu_switch_to_cards_mode)
+        } else {
+            isInCardsMode = true
+            button.title = getString(R.string.menu_switch_to_notes_mode)
+        }
+
+        searchCards()
+    }
+
     private fun onTruncate() {
         val truncate = mActionBarMenu!!.findItem(R.id.action_truncate)
 
@@ -1465,6 +1493,7 @@ open class CardBrowser :
         savedInstanceState.putInt("mLastSelectedPosition", mLastSelectedPosition)
         savedInstanceState.putBoolean("mInMultiSelectMode", isInMultiSelectMode)
         savedInstanceState.putBoolean("mIsTruncated", isTruncated)
+        savedInstanceState.putBoolean("mIsInCardsMode", isInCardsMode)
         super.onSaveInstanceState(savedInstanceState)
     }
 
@@ -1478,6 +1507,7 @@ open class CardBrowser :
         mLastSelectedPosition = savedInstanceState.getInt("mLastSelectedPosition")
         isInMultiSelectMode = savedInstanceState.getBoolean("mInMultiSelectMode")
         isTruncated = savedInstanceState.getBoolean("mIsTruncated")
+        isInCardsMode = savedInstanceState.getBoolean("mIsInCardsMode")
         searchCards()
     }
 
@@ -1516,16 +1546,28 @@ open class CardBrowser :
             mCardsAdapter!!.notifyDataSetChanged()
             //  estimate maximum number of cards that could be visible (assuming worst-case minimum row height of 20dp)
             // Perform database query to get all card ids
-            TaskManager.launchCollectionTask(
-                SearchCards(
-                    searchText!!,
-                    if (mOrder == CARD_ORDER_NONE) NoOrdering() else UseCollectionOrdering(),
-                    numCardsToRender(),
-                    mColumn1Index,
-                    mColumn2Index
-                ),
-                mSearchCardsHandler
-            )
+            if (isInCardsMode) {
+                TaskManager.launchCollectionTask(
+                    SearchCards(
+                        searchText!!,
+                        if (mOrder == CARD_ORDER_NONE) NoOrdering() else UseCollectionOrdering(),
+                        numCardsToRender(),
+                        mColumn1Index,
+                        mColumn2Index
+                    ),
+                    mSearchCardsHandler
+                )
+            } else {
+                TaskManager.launchCollectionTask(
+                    SearchNotes(
+                        searchText!!,
+                        numCardsToRender(),
+                        mColumn1Index,
+                        mColumn2Index
+                    ),
+                    mSearchCardsHandler
+                )
+            }
         }
     }
 
@@ -1554,7 +1596,11 @@ open class CardBrowser :
     override val subtitleText: String
         get() {
             val count = cardCount
-            return resources.getQuantityString(R.plurals.card_browser_subtitle, count, count)
+            return if (isInCardsMode) {
+                resources.getQuantityString(R.plurals.card_browser_subtitle, count, count)
+            } else {
+                resources.getQuantityString(R.plurals.card_browser_subtitle_notes, count, count)
+            }
         }
 
     // convenience method for updateCardsInList(...)

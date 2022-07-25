@@ -77,6 +77,8 @@
         <item>Created</item>
         <item>Note Modified</item>
     </string-array>
+    <string name="menu_switch_to_notes_mode">Show Notes</string>
+    <string name="menu_switch_to_cards_mode">Show Cards</string>
 
     <!-- Filter Sheet -->
     <string name="apply_filter">Apply</string>
