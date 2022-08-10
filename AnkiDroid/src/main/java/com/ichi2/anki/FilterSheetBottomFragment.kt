@@ -48,12 +48,15 @@ import com.ichi2.themes.ThemeUtils.getThemedColor
 class FilterSheetBottomFragment :
     BottomSheetDialogFragment(),
     FlagsAdapter.OnItemClickListener,
+    NoteTypesAdapter.OnItemClickListener,
     CollectionGetter {
     private lateinit var behavior: BottomSheetBehavior<View>
 
     private var flagSearchItems = mutableListOf<SearchNode.Flag>()
+    private var noteTypeSearchItems = mutableListOf<String>()
 
-    private lateinit var flagRecyclerView: RecyclerView
+    lateinit var flagRecyclerView: RecyclerView
+    private lateinit var noteTypeRecyclerView: RecyclerView
 
     private var lastClickTime = 0
 
@@ -78,7 +81,7 @@ class FilterSheetBottomFragment :
     ): View = inflater.inflate(R.layout.filter_bottom_sheet, container, false).apply {
         val applyButton = this.findViewById<Button>(R.id.apply_filter_button)
         applyButton.setOnClickListener {
-            val filterQuery = createQuery(flagSearchItems)
+            val filterQuery = createQuery()
 
             if (filterQuery != "") {
                 (activity as CardBrowser).searchWithFilterQuery(filterQuery)
@@ -90,6 +93,20 @@ class FilterSheetBottomFragment :
         cancelButton.setOnClickListener {
             dismiss()
         }
+
+        if (this@FilterSheetBottomFragment::flagRecyclerView.isInitialized) {
+            for (position in 0 until flagRecyclerView.childCount) {
+                val flagName = flagRecyclerView[position].findViewById<TextView>(R.id.filter_list_item)
+                for (flag in Flags.values()) {
+                    if (flag.getFlagName(requireActivity()) == flagName.text) {
+                        if (isSelected(flag, flagSearchItems)) {
+                            flagRecyclerView[position].setBackgroundColor(getThemedColor(R.attr.filterItemBackgroundSelected))
+                            flagName.setTextColor(getThemedColor(R.attr.filterItemTextColorSelected))
+                        }
+                    }
+                }
+            }
+        }
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -99,11 +116,24 @@ class FilterSheetBottomFragment :
 
         /* list of all flags */
 
-        val flagListAdapter = FlagsAdapter(activity, Flags.values(), this)
+        val flagListAdapter = FlagsAdapter(requireActivity(), Flags.values(), this)
 
         flagRecyclerView = requireView().findViewById<RecyclerView?>(R.id.filter_bottom_flag_list).apply {
             this.layoutManager = LinearLayoutManager(activity)
             this.adapter = flagListAdapter
+            this.addItemDecoration(
+                DividerItemDecoration(
+                    activity,
+                    DividerItemDecoration.VERTICAL
+                )
+            )
+        }
+
+        val noteTypeListAdapter = NoteTypesAdapter(activity, col.models.allNames(), this)
+
+        noteTypeRecyclerView = requireView().findViewById<RecyclerView?>(R.id.filter_bottom_note_type_list).apply {
+            this.layoutManager = LinearLayoutManager(activity)
+            this.adapter = noteTypeListAdapter
             this.addItemDecoration(
                 DividerItemDecoration(
                     activity,
@@ -137,6 +167,27 @@ class FilterSheetBottomFragment :
                 }
             }
         }
+
+        val noteTypesButton = requireView().findViewById<LinearLayout>(R.id.filterByNoteTypesText)
+        val noteTypesToggleIcon = requireView().findViewById<ImageView>(R.id.filter_noteTypesListToggle)
+        val noteTypesRecyclerViewLayout =
+            requireView().findViewById<LinearLayout>(R.id.noteTypesRecyclerViewLayout)
+
+        noteTypesButton.setOnClickListener {
+
+            if (SystemClock.elapsedRealtime() - lastClickTime > DELAY_TIME) {
+
+                lastClickTime = SystemClock.elapsedRealtime().toInt()
+
+                if (noteTypesRecyclerViewLayout.isVisible) {
+                    noteTypesRecyclerViewLayout.visibility = View.GONE
+                    noteTypesToggleIcon.setImageResource(R.drawable.filter_sheet_unopened_list_icon)
+                } else {
+                    noteTypesRecyclerViewLayout.visibility = View.VISIBLE
+                    noteTypesToggleIcon.setImageResource(R.drawable.filter_sheet_opened_list_icon)
+                }
+            }
+        }
     }
 
     /**
@@ -146,24 +197,44 @@ class FilterSheetBottomFragment :
      */
     override fun onDismiss(dialog: DialogInterface) {
         super.onDismiss(dialog)
-
-        clearQuery()
     }
 
-    private fun createQuery(
-        flagList: MutableList<SearchNode.Flag>
-    ): String {
+    private fun createQuery(): String {
 
-        if (flagList.isEmpty()) {
+        if (flagSearchItems.isEmpty() && noteTypeSearchItems.isEmpty()) {
             return ""
         }
 
         val node = searchNode {
-            group = group {
-                joiner = SearchNode.Group.Joiner.OR
 
-                for (flagNode in flagList) {
-                    nodes += searchNode { flag = flagNode }
+            group = group {
+
+                joiner = SearchNode.Group.Joiner.AND
+
+                if (noteTypeSearchItems.isNotEmpty()) {
+                    nodes += searchNode {
+
+                        group = group {
+                            joiner = SearchNode.Group.Joiner.OR
+
+                            for (noteType in noteTypeSearchItems) {
+                                nodes += searchNode { note = noteType }
+                            }
+                        }
+                    }
+                }
+
+                if (flagSearchItems.isNotEmpty()) {
+                    nodes += searchNode {
+
+                        group = group {
+                            joiner = SearchNode.Group.Joiner.OR
+
+                            for (flagNode in flagSearchItems) {
+                                nodes += searchNode { flag = flagNode }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -173,6 +244,7 @@ class FilterSheetBottomFragment :
 
     private fun clearQuery() {
         flagSearchItems.clear()
+        noteTypeSearchItems.clear()
     }
 
     companion object {
@@ -210,10 +282,26 @@ class FilterSheetBottomFragment :
     fun isSelected(flag: Flags, flagSearchItems: List<SearchNode.Flag>): bool {
         return flagSearchItems.contains(flag.flagNode)
     }
+
+    override fun onNoteTypeItemClicked(item: String, position: Int) {
+        val itemTextView = noteTypeRecyclerView[position].findViewById<TextView>(R.id.filter_list_item)
+
+        if (!noteTypeSearchItems.contains(item)) {
+            noteTypeRecyclerView[position].setBackgroundColor(getThemedColor(R.attr.filterItemBackgroundSelected))
+            itemTextView.setTextColor(getThemedColor(R.attr.filterItemTextColorSelected))
+
+            noteTypeSearchItems.add(item)
+        } else {
+            noteTypeRecyclerView[position].setBackgroundColor(getThemedColor(R.attr.filterItemBackground))
+            itemTextView.setTextColor(getThemedColor(R.attr.filterItemTextColor))
+
+            noteTypeSearchItems.remove(item)
+        }
+    }
 }
 
 class FlagsAdapter(
-    val context: Context?,
+    val context: Context,
     private var dataSet: Array<FilterSheetBottomFragment.Flags>,
     private val listener: OnItemClickListener
 ) :
@@ -224,15 +312,15 @@ class FlagsAdapter(
         val icon: ImageView = view.findViewById(R.id.filter_list_icon)
 
         fun bind(
-            currFlag: FilterSheetBottomFragment.Flags,
+            curr: FilterSheetBottomFragment.Flags,
             clickListener: OnItemClickListener,
             position: Int
         ) {
-            item.text = currFlag.getFlagName(itemView.context)
-            icon.setImageResource(currFlag.flagIcon)
+            item.text = curr.getFlagName(itemView.context)
+            icon.setImageResource(curr.flagIcon)
 
             itemView.setOnClickListener {
-                clickListener.onFlagItemClicked(currFlag, position)
+                clickListener.onFlagItemClicked(curr, position)
             }
         }
     }
@@ -245,13 +333,55 @@ class FlagsAdapter(
     }
 
     override fun onBindViewHolder(viewHolder: ViewHolder, position: Int) {
-        val currTag = dataSet[position]
-        viewHolder.bind(currTag, listener, position)
+
+        viewHolder.bind(dataSet[position], listener, position)
     }
 
     override fun getItemCount() = dataSet.size
 
     interface OnItemClickListener {
         fun onFlagItemClicked(item: FilterSheetBottomFragment.Flags, position: Int)
+    }
+}
+
+class NoteTypesAdapter(
+    val context: Context?,
+    private var dataSet: List<String>,
+    private val listener: OnItemClickListener
+) :
+    RecyclerView.Adapter<NoteTypesAdapter.ViewHolder>() {
+
+    class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+        val item: TextView = view.findViewById(R.id.filter_list_item)
+
+        fun bind(
+            curr: String,
+            clickListener: OnItemClickListener,
+            position: Int
+        ) {
+            item.text = curr
+
+            itemView.setOnClickListener {
+                clickListener.onNoteTypeItemClicked(curr, position)
+            }
+        }
+    }
+
+    override fun onCreateViewHolder(viewGroup: ViewGroup, viewType: Int): ViewHolder {
+        val view = LayoutInflater.from(viewGroup.context)
+            .inflate(R.layout.filter_list_flag_item_layout, viewGroup, false)
+
+        return ViewHolder(view)
+    }
+
+    override fun onBindViewHolder(viewHolder: ViewHolder, position: Int) {
+
+        viewHolder.bind(dataSet[position], listener, position)
+    }
+
+    override fun getItemCount() = dataSet.size
+
+    interface OnItemClickListener {
+        fun onNoteTypeItemClicked(item: String, position: Int)
     }
 }
