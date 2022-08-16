@@ -927,6 +927,10 @@ open class CardBrowser :
                 // Provide SearchView with the previous search terms
                 mSearchView!!.setQuery(mSearchTerms!!, false)
             }
+
+            mActionBarMenu!!.findItem(R.id.action_switch_type).title =
+                if (isCardsMode) getString(R.string.switch_to_notes_browser)
+                else getString(R.string.switch_to_cards_browser)
         } else {
             // multi-select mode
             menuInflater.inflate(R.menu.card_browser_multiselect, menu)
@@ -1501,12 +1505,6 @@ open class CardBrowser :
         isTruncated = savedInstanceState.getBoolean("mIsTruncated")
         isCardsMode = savedInstanceState.getBoolean("isCardsMode")
 
-        val switchBtn = mActionBarMenu!!.findItem(R.id.action_switch_type)
-        if (isCardsMode) {
-            switchBtn.title = "Show Notes"
-        } else {
-            switchBtn.title = "Show Cards"
-        }
         searchCards()
     }
 
